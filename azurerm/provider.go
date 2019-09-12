@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform/terraform"
 	"github.com/terraform-providers/terraform-provider-azurerm/azurerm/helpers/validate"
 	"github.com/terraform-providers/terraform-provider-azurerm/azurerm/internal/services/common"
+	"github.com/terraform-providers/terraform-provider-azurerm/azurerm/internal/services/compute"
 )
 
 // Provider returns a terraform.ResourceProvider.
@@ -41,7 +42,9 @@ func Provider() terraform.ResourceProvider {
 	//		All over the place
 	//
 	// For the moment/until that's done, we'll have to continue defining these inline
-	supportedServices := []common.ServiceRegistration{}
+	supportedServices := []common.ServiceRegistration{
+		compute.Registration{},
+	}
 
 	dataSources := map[string]*schema.Resource{
 		"azurerm_api_management":                         dataSourceApiManagementService(),
@@ -304,6 +307,7 @@ func Provider() terraform.ResourceProvider {
 		"azurerm_mariadb_firewall_rule":                              resourceArmMariaDBFirewallRule(),
 		"azurerm_mariadb_server":                                     resourceArmMariaDbServer(),
 		"azurerm_mariadb_virtual_network_rule":                       resourceArmMariaDbVirtualNetworkRule(),
+		"azurerm_marketplace_agreement":                              resourceArmMarketplaceAgreement(),
 		"azurerm_media_services_account":                             resourceArmMediaServicesAccount(),
 		"azurerm_metric_alertrule":                                   resourceArmMetricAlertRule(),
 		"azurerm_monitor_autoscale_setting":                          resourceArmMonitorAutoScaleSetting(),
