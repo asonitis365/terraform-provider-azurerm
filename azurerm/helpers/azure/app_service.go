@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"regexp"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/web/mgmt/2018-02-01/web"
-	"github.com/hashicorp/terraform/helper/schema"
-	"github.com/hashicorp/terraform/helper/validation"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 	"github.com/terraform-providers/terraform-provider-azurerm/azurerm/helpers/suppress"
-	"github.com/terraform-providers/terraform-provider-azurerm/azurerm/helpers/validate"
 	"github.com/terraform-providers/terraform-provider-azurerm/azurerm/utils"
 )
 
@@ -154,6 +154,9 @@ func SchemaAppServiceAuthSettings() *schema.Schema {
 				"additional_login_params": {
 					Type:     schema.TypeMap,
 					Optional: true,
+					Elem: &schema.Schema{
+						Type: schema.TypeString,
+					},
 				},
 				"allowed_external_redirect_urls": {
 					Type:     schema.TypeList,
@@ -174,7 +177,7 @@ func SchemaAppServiceAuthSettings() *schema.Schema {
 				"issuer": {
 					Type:         schema.TypeString,
 					Optional:     true,
-					ValidateFunc: validate.URLIsHTTPOrHTTPS,
+					ValidateFunc: validation.IsURLWithScheme([]string{"http", "https"}),
 				},
 				"runtime_version": {
 					Type:     schema.TypeString,
@@ -305,7 +308,7 @@ func SchemaAppServiceSiteConfig() *schema.Schema {
 							"virtual_network_subnet_id": {
 								Type:         schema.TypeString,
 								Optional:     true,
-								ValidateFunc: validate.NoEmptyStrings,
+								ValidateFunc: validation.StringIsNotEmpty,
 							},
 							"subnet_mask": {
 								Type:     schema.TypeString,
@@ -325,17 +328,16 @@ func SchemaAppServiceSiteConfig() *schema.Schema {
 				"java_version": {
 					Type:     schema.TypeString,
 					Optional: true,
-					ValidateFunc: validation.StringInSlice([]string{
-						"1.7",
-						"1.8",
-						"11",
-					}, false),
+					ValidateFunc: validation.StringMatch(
+						regexp.MustCompile(`^(1\.7|1\.8|11)`),
+						`Invalid Java version provided`),
 				},
 
 				"java_container": {
 					Type:     schema.TypeString,
 					Optional: true,
 					ValidateFunc: validation.StringInSlice([]string{
+						"JAVA",
 						"JETTY",
 						"TOMCAT",
 					}, true),
@@ -373,6 +375,7 @@ func SchemaAppServiceSiteConfig() *schema.Schema {
 						"7.0",
 						"7.1",
 						"7.2",
+						"7.3",
 					}, false),
 				},
 
@@ -480,6 +483,11 @@ func SchemaAppServiceSiteConfig() *schema.Schema {
 				},
 
 				"cors": SchemaWebCorsSettings(),
+
+				"auto_swap_slot_name": {
+					Type:     schema.TypeString,
+					Optional: true,
+				},
 			},
 		},
 	}
@@ -596,7 +604,7 @@ func SchemaAppServiceStorageAccounts() *schema.Schema {
 				"name": {
 					Type:         schema.TypeString,
 					Required:     true,
-					ValidateFunc: validate.NoEmptyStrings,
+					ValidateFunc: validation.StringIsNotEmpty,
 				},
 
 				"type": {
@@ -611,20 +619,20 @@ func SchemaAppServiceStorageAccounts() *schema.Schema {
 				"account_name": {
 					Type:         schema.TypeString,
 					Required:     true,
-					ValidateFunc: validate.NoEmptyStrings,
+					ValidateFunc: validation.StringIsNotEmpty,
 				},
 
 				"share_name": {
 					Type:         schema.TypeString,
 					Required:     true,
-					ValidateFunc: validate.NoEmptyStrings,
+					ValidateFunc: validation.StringIsNotEmpty,
 				},
 
 				"access_key": {
 					Type:         schema.TypeString,
 					Required:     true,
 					Sensitive:    true,
-					ValidateFunc: validate.NoEmptyStrings,
+					ValidateFunc: validation.StringIsNotEmpty,
 				},
 
 				"mount_path": {
@@ -777,7 +785,6 @@ func SchemaAppServiceDataSourceSiteConfig() *schema.Schema {
 				"cors": {
 					Type:     schema.TypeList,
 					Computed: true,
-					MaxItems: 1,
 					Elem: &schema.Resource{
 						Schema: map[string]*schema.Schema{
 							"allowed_origins": {
@@ -1161,7 +1168,6 @@ func FlattenAppServiceLogs(input *web.SiteLogsConfigProperties) []interface{} {
 
 	appLogs := make([]interface{}, 0)
 	if input.ApplicationLogs != nil {
-
 		appLogsItem := make(map[string]interface{})
 
 		blobStorage := make([]interface{}, 0)
@@ -1194,7 +1200,6 @@ func FlattenAppServiceLogs(input *web.SiteLogsConfigProperties) []interface{} {
 
 		fileSystem := make([]interface{}, 0)
 		if fileSystemInput := input.HTTPLogs.FileSystem; fileSystemInput != nil {
-
 			fileSystemItem := make(map[string]interface{})
 
 			if fileSystemInput.RetentionInDays != nil {
@@ -1242,7 +1247,7 @@ func ExpandAppServiceLogs(input interface{}) web.SiteLogsConfigProperties {
 	configs := input.([]interface{})
 	logs := web.SiteLogsConfigProperties{}
 
-	if len(configs) == 0 {
+	if len(configs) == 0 || configs[0] == nil {
 		return logs
 	}
 
@@ -1313,12 +1318,11 @@ func ExpandAppServiceLogs(input interface{}) web.SiteLogsConfigProperties {
 	return logs
 }
 
-func ExpandAppServiceIdentity(d *schema.ResourceData) *web.ManagedServiceIdentity {
-	identities := d.Get("identity").([]interface{})
-	if len(identities) == 0 {
+func ExpandAppServiceIdentity(input []interface{}) *web.ManagedServiceIdentity {
+	if len(input) == 0 {
 		return nil
 	}
-	identity := identities[0].(map[string]interface{})
+	identity := input[0].(map[string]interface{})
 	identityType := web.ManagedServiceIdentityType(identity["type"].(string))
 
 	identityIds := make(map[string]*web.ManagedServiceIdentityUserAssignedIdentitiesValue)
@@ -1342,14 +1346,14 @@ func FlattenAppServiceIdentity(identity *web.ManagedServiceIdentity) []interface
 		return make([]interface{}, 0)
 	}
 
-	result := make(map[string]interface{})
-	result["type"] = string(identity.Type)
-
+	principalId := ""
 	if identity.PrincipalID != nil {
-		result["principal_id"] = *identity.PrincipalID
+		principalId = *identity.PrincipalID
 	}
+
+	tenantId := ""
 	if identity.TenantID != nil {
-		result["tenant_id"] = *identity.TenantID
+		tenantId = *identity.TenantID
 	}
 
 	identityIds := make([]string, 0)
@@ -1358,9 +1362,15 @@ func FlattenAppServiceIdentity(identity *web.ManagedServiceIdentity) []interface
 			identityIds = append(identityIds, key)
 		}
 	}
-	result["identity_ids"] = identityIds
 
-	return []interface{}{result}
+	return []interface{}{
+		map[string]interface{}{
+			"identity_ids": identityIds,
+			"principal_id": principalId,
+			"tenant_id":    tenantId,
+			"type":         string(identity.Type),
+		},
+	}
 }
 
 func ExpandAppServiceSiteConfig(input interface{}) (*web.SiteConfig, error) {
@@ -1461,7 +1471,6 @@ func ExpandAppServiceSiteConfig(input interface{}) (*web.SiteConfig, error) {
 			}
 
 			restrictions = append(restrictions, ipSecurityRestriction)
-
 		}
 		siteConfig.IPSecurityRestrictions = &restrictions
 	}
@@ -1518,6 +1527,10 @@ func ExpandAppServiceSiteConfig(input interface{}) (*web.SiteConfig, error) {
 		corsSettings := v.(interface{})
 		expand := ExpandWebCorsSettings(corsSettings)
 		siteConfig.Cors = &expand
+	}
+
+	if v, ok := config["auto_swap_slot_name"]; ok {
+		siteConfig.AutoSwapSlotName = utils.String(v.(string))
 	}
 
 	return siteConfig, nil
@@ -1640,11 +1653,14 @@ func FlattenAppServiceSiteConfig(input *web.SiteConfig) []interface{} {
 
 	result["cors"] = FlattenWebCorsSettings(input.Cors)
 
+	if input.AutoSwapSlotName != nil {
+		result["auto_swap_slot_name"] = *input.AutoSwapSlotName
+	}
+
 	return append(results, result)
 }
 
-func ExpandAppServiceStorageAccounts(d *schema.ResourceData) map[string]*web.AzureStorageInfoValue {
-	input := d.Get("storage_account").(*schema.Set).List()
+func ExpandAppServiceStorageAccounts(input []interface{}) map[string]*web.AzureStorageInfoValue {
 	output := make(map[string]*web.AzureStorageInfoValue, len(input))
 
 	for _, v := range input {

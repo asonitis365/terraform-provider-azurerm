@@ -1,12 +1,14 @@
 ---
+subcategory: "Recovery Services"
 layout: "azurerm"
 page_title: "Azure Resource Manager: azurerm_recovery_services_protection_container"
-sidebar_current: "docs-azurerm-recovery-services-protection-container"
 description: |-
     Manages a site recovery services protection container on Azure.
 ---
 
 # azurerm_recovery_services_protection_container
+
+~> **NOTE:** This resource has been deprecated in favour of the `azurerm_site_recovery_protection_container` resource and will be removed in the next major version of the AzureRM Provider. The new resource shares the same fields as this one, and information on migrating across [can be found in this guide](../guides/migrating-between-renamed-resources.html).
 
 Manages a Azure recovery vault protection container.
 
@@ -25,23 +27,23 @@ resource "azurerm_resource_group" "secondary" {
 
 resource "azurerm_recovery_services_vault" "vault" {
   name                = "example-recovery-vault"
-  location            = "${azurerm_resource_group.secondary.location}"
-  resource_group_name = "${azurerm_resource_group.secondary.name}"
+  location            = azurerm_resource_group.secondary.location
+  resource_group_name = azurerm_resource_group.secondary.name
   sku                 = "Standard"
 }
 
 resource "azurerm_recovery_services_fabric" "fabric" {
-  name                         = "primary-fabric"
-  resource_group_name          = "${azurerm_resource_group.secondary.name}"
-  recovery_vault_name          = "${azurerm_recovery_services_vault.vault.name}"
-  location                     = "${azurerm_resource_group.primary.location}"
+  name                = "primary-fabric"
+  resource_group_name = azurerm_resource_group.secondary.name
+  recovery_vault_name = azurerm_recovery_services_vault.vault.name
+  location            = azurerm_resource_group.primary.location
 }
 
 resource "azurerm_recovery_services_protection_container" "protection-container" {
-  name                          = "protection-container"
-  resource_group_name           = "${azurerm_resource_group.secondary.name}"
-  recovery_vault_name           = "${azurerm_recovery_services_vault.vault.name}"
-  recovery_fabric_name          = "${azurerm_recovery_services_fabric.fabric.name}"
+  name                 = "protection-container"
+  resource_group_name  = azurerm_resource_group.secondary.name
+  recovery_vault_name  = azurerm_recovery_services_vault.vault.name
+  recovery_fabric_name = azurerm_recovery_services_fabric.fabric.name
 }
 ```
 
@@ -61,11 +63,20 @@ The following arguments are supported:
 
 In addition to the arguments above, the following attributes are exported:
 
-* `id` - The resource ID.
+* `id` - The ID of the Recovery Services Protection Container.
+
+## Timeouts
+
+The `timeouts` block allows you to specify [timeouts](https://www.terraform.io/docs/configuration/resources.html#timeouts) for certain actions:
+
+* `create` - (Defaults to 30 minutes) Used when creating the Recovery Services Protection Container.
+* `update` - (Defaults to 30 minutes) Used when updating the Recovery Services Protection Container.
+* `read` - (Defaults to 5 minutes) Used when retrieving the Recovery Services Protection Container.
+* `delete` - (Defaults to 30 minutes) Used when deleting the Recovery Services Protection Container.
 
 ## Import
 
-Site recovery recovery vault fabric can be imported using the `resource id`, e.g.
+Recovery Services Protection Containers can be imported using the `resource id`, e.g.
 
 ```shell
 terraform import azurerm_recovery_services_protection_container.mycontainer /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/resource-group-name/providers/Microsoft.RecoveryServices/vaults/recovery-vault-name/replicationFabrics/fabric-name/replicationProtectionContainers/protection-container-name
